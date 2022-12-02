@@ -44,6 +44,7 @@
 #include <string>
 #include <vector>
 #include <cstdlib>
+#include <unistd.h>
 
 #include "ns3/core-module.h"
 #include "ns3/network-module.h"
@@ -70,6 +71,7 @@ NS_LOG_COMPONENT_DEFINE ("GenericTopologyCreation");
 
 int main (int argc, char *argv[])
 {
+    //LogComponentEnableAll(LogLevel::LOG_INFO);
 
     // ---------- Simulation Variables ------------------------------------------
 
@@ -98,6 +100,7 @@ int main (int argc, char *argv[])
 
     std::string adj_mat_file_name ("scratch/output/adjacency_matrix.txt");
     std::string node_coordinates_file_name ("scratch/output/node_coordinates.txt");
+    std::string node_interfaces_name ("scratch/output/node_interfaces.txt");
 
     CommandLine cmd (__FILE__);
     cmd.Parse (argc, argv);
@@ -139,10 +142,11 @@ int main (int argc, char *argv[])
     NodeContainer nodes;   // Declare nodes objects
     nodes.Create (n_nodes);
 
-    NS_LOG_INFO ("Create P2P Link Attributes.");
+    NS_LOG_INFO("Create P2P Link Attributes.");
 
-  NodeContainer nodes;   // Declare nodes objects
-  nodes.Create (n_nodes);
+    PointToPointHelper p2p;
+    p2p.SetDeviceAttribute("DataRate", StringValue(LinkRate));
+    p2p.SetChannelAttribute("Delay", StringValue(LinkDelay));
 
     NS_LOG_INFO ("Install Internet Stack to Nodes.");
 
@@ -151,30 +155,43 @@ int main (int argc, char *argv[])
 
     NS_LOG_INFO ("Assign Addresses to Nodes.");
 
-  InternetStackHelper internet;
-  internet.Install (NodeContainer::GetGlobal ());
-
-  NS_LOG_INFO ("Assign Addresses to Nodes.");
-
-  Ipv4AddressHelper ipv4_n;
-  ipv4_n.SetBase ("10.0.0.0", "255.255.255.252");
+    Ipv4AddressHelper ipv4_n;
+    ipv4_n.SetBase ("10.0.0.0", "255.255.255.252");
 
     NS_LOG_INFO ("Create Links Between Nodes.");
 
     uint32_t linkCount = 0;
 
+    // Create a p2p link from node i to node j.
+    // p2p links are bidirectional, so we only need connections from i to j, and not also from j to i.
+    std::string ip_names[n_nodes][n_nodes];
     for (size_t i = 0; i < Adj_Matrix.size (); i++)
     {
-      for (size_t j = 0; j < Adj_Matrix[i].size (); j++)
+        for (size_t j = 0; j < Adj_Matrix[i].size (); j++)
         {
-
             if (Adj_Matrix[i][j] == 1) // connection from i --to--> j
             {
-              NodeContainer n_links = NodeContainer (nodes.Get (i), nodes.Get (j));
-              NetDeviceContainer n_devs = p2p.Install (n_links);
-              ipv4_n.Assign (n_devs);
-              ipv4_n.NewNetwork ();
+                NodeContainer n_links = NodeContainer (nodes.Get (i), nodes.Get (j));
+                NetDeviceContainer n_devs = p2p.Install (n_links);
+                ipv4_n.Assign (n_devs);
+                ipv4_n.NewNetwork ();
+                linkCount++;
                 NS_LOG_INFO ("matrix element [" << i << "][" << j << "] is 1");
+
+                // track interface names
+                for (uint32_t k = 0; k < 2; k++) {
+                    Ptr<NetDevice> device = n_devs.Get(k);
+                    Ptr<Ipv4> ipv4 = device->GetNode()->GetObject<Ipv4>();
+                    int32_t interface = ipv4->GetInterfaceForDevice(device);
+                    Ipv4Address addr = ipv4->GetAddress(interface, ipv4->GetNAddresses(interface)-1).GetAddress();
+                    std::stringstream saddr;
+                    saddr << addr;
+                    if (k == 0) {
+                        ip_names[i][j] = saddr.str();
+                    } else {
+                        ip_names[j][i] = saddr.str();
+                    }
+                }
             }
             else
             {
@@ -184,6 +201,22 @@ int main (int argc, char *argv[])
     }
     NS_LOG_INFO ("Number of links in the adjacency matrix is: " << linkCount);
     NS_LOG_INFO ("Number of all nodes is: " << nodes.GetN ());
+    
+    // Output the ip addresses associated with each node, to make analysis of the network
+    // easier at the end.
+    ofstream fout;
+    fout.open(node_interfaces_name, std::ios_base::openmode::_S_out);
+    for (int i = 0; i < n_nodes; i++) {
+        for (int j = 0; j < n_nodes; j++) {
+            if (ip_names[i][j].length() > 0) {
+                fout << ip_names[i][j] << " ";
+            } else {
+                fout << "x ";
+            }
+        }
+        fout << "\n";
+    }
+    fout.close();
 
     NS_LOG_INFO ("Initialize Global Routing.");
     Ipv4GlobalRoutingHelper::PopulateRoutingTables ();
@@ -202,7 +235,7 @@ int main (int argc, char *argv[])
         positionAlloc_n->Add (Vector (coord_array[m][0], coord_array[m][1], 0));
         Ptr<Node> n0 = nodes.Get (m);
         Ptr<ConstantPositionMobilityModel> nLoc =  n0->GetObject<ConstantPositionMobilityModel> ();
-        if (nLoc == 0)
+        if (!nLoc)
         {
             nLoc = CreateObject<ConstantPositionMobilityModel> ();
             n0->AggregateObject (nLoc);
@@ -272,8 +305,8 @@ int main (int argc, char *argv[])
     NS_LOG_INFO ("Configure Tracing.");
 
     AsciiTraceHelper ascii;
-    csma.EnableAsciiAll (ascii.CreateFileStream (tr_name));
-    csma.EnablePcapAll (pcap_name);
+    p2p.EnableAsciiAll (ascii.CreateFileStream (tr_name));
+    // p2p.EnablePcapAll (pcap_name);
 
     // Ptr<FlowMonitor> flowmon;
     // FlowMonitorHelper flowmonHelper;
@@ -291,11 +324,22 @@ int main (int argc, char *argv[])
 
     // ---------- End of Simulation Monitoring ---------------------------------
 
+    runPythonFile("scratch/replace_addresses.py");
+
     return 0;
 
 }
 
 // ---------- Function Definitions -------------------------------------------
+
+void runPythonFile(std::string filename)
+{
+    std::stringstream scmd;
+    char cwdbuf[2048];
+    scmd << "python " << filename << " " << getcwd(cwdbuf, sizeof(cwdbuf)) << "/scratch";
+    FILE* in = popen(scmd.str().c_str(), "r");
+    pclose(in);
+}
 
 vector<vector<bool> > readNxNMatrix (std::string adj_mat_file_name)
 {
