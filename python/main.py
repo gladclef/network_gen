@@ -163,6 +163,6 @@ if __name__ == "__main__":
 				MG.use_existing_connections(MGs[y-1][x], dir="north")
 
 	# save out to files
-	draw_adjacency_matrix(MGs, os.path.join(dir(__file__), "output", "adjacency_matrix.png"))
-	create_adjacency_matrix(MGs, os.path.join(dir(__file__), "output", "adjacency_matrix.txt"))
-	write_node_coordinates(MGs, os.path.join(dir(__file__), "output", "node_coordinates.txt"))
+	draw_adjacency_matrix(MGs, os.path.join(dir(__file__), "../output", "adjacency_matrix.png"))
+	create_adjacency_matrix(MGs, os.path.join(dir(__file__), "../output", "adjacency_matrix.txt"))
+	write_node_coordinates(MGs, os.path.join(dir(__file__), "../output", "node_coordinates.txt"))
