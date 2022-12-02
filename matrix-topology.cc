@@ -126,9 +126,9 @@ int main (int argc, char *argv[])
     int matrixDimension = Adj_Matrix.size ();
 
     if (matrixDimension != n_nodes)
-      {
+    {
         NS_FATAL_ERROR ("The number of lines in coordinate file is: " << n_nodes << " not equal to the number of nodes in adjacency matrix size " << matrixDimension);
-      }
+    }
 
     // ---------- End of Read Node Coordinates File ----------------------------
 
@@ -272,8 +272,8 @@ int main (int argc, char *argv[])
     NS_LOG_INFO ("Configure Tracing.");
 
     AsciiTraceHelper ascii;
-    csma.EnableAsciiAll (ascii.CreateFileStream (tr_name.c_str ()));
-    csma.EnablePcapAll (pcap_name.c_str());
+    csma.EnableAsciiAll (ascii.CreateFileStream (tr_name));
+    csma.EnablePcapAll (pcap_name);
 
     // Ptr<FlowMonitor> flowmon;
     // FlowMonitorHelper flowmonHelper;
@@ -281,7 +281,7 @@ int main (int argc, char *argv[])
 
     // Configure animator with default settings
 
-    AnimationInterface anim (anim_name.c_str ());
+    AnimationInterface anim (anim_name);
     NS_LOG_INFO ("Run Simulation.");
 
     Simulator::Stop (Seconds (SimTime));
