@@ -1,4 +1,14 @@
 output/*
 __pycache__
+
+# example files
 first.cc
+second.cc
+third.cc
+fourth.cc
+fifth.cc
+sixth.cc
+seventh.cc
+tutorial-app.cc
+tutorial-app.h
 scratch-simulator.cc
