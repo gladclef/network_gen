@@ -1,6 +1,24 @@
 output/*
 __pycache__
 
+# lsp files, created with "cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=1 .."
+compile_commands.json
+
+# cmake/make files
+CMake*
+Makefile
+*.cmake
+
+# ns3 files
+ns3Config*
+ns3config*
+pkgconfig
+scratch
+src
+subdir
+utils
+examples
+
 # example files
 first.cc
 second.cc
@@ -12,3 +30,5 @@ seventh.cc
 tutorial-app.cc
 tutorial-app.h
 scratch-simulator.cc
+hello-simulator.cc
+introspected-command-line-preamble.h

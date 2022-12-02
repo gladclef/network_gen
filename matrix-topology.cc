@@ -96,8 +96,8 @@ int main (int argc, char *argv[])
     std::string flow_name ("n-node-ppp.xml");
     std::string anim_name ("n-node-ppp.anim.xml");
 
-    std::string adj_mat_file_name ("scratch/adjacency_matrix.txt");
-    std::string node_coordinates_file_name ("scratch/node_coordinates.txt");
+    std::string adj_mat_file_name ("scratch/output/adjacency_matrix.txt");
+    std::string node_coordinates_file_name ("scratch/output/node_coordinates.txt");
 
     CommandLine cmd (__FILE__);
     cmd.Parse (argc, argv);
