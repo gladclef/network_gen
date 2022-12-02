@@ -7,22 +7,49 @@ from tools import *
 def create_adjacency_matrix(MGs: list[list[MicroGrid]], filename: str):
 	ny = len(MGs)
 	nx = len(MGs[0])
+	ntotal = nx * ny # how many microgrids are there
 
-	first = True
+	# A ntotal x ntotal grid of connections between MGs.
+	# If adjaceny_matrix[i][j] is true, that means there's a connection from MG i --to--> MG j.
+	# One row per MG, one column per MG.
+	adjaceny_matrix: list[list[bool]] = [[False for x in range(ntotal)] for y in range(ntotal)]
+
+	# First build the adjacency matrix
+	for rowIdx, MGs_row in enumerate(MGs):
+		for colIdx, MG in enumerate(MGs_row):
+			mgIdx = rowIdx * nx + colIdx
+
+			mgAdjacencyMatrix = MG.get_adjacency_matrix(nx, ny)
+			for amRow, row in enumerate(mgAdjacencyMatrix):
+				for amCol, connection in enumerate(row):
+					otherIdx = amRow*nx + amCol
+
+					if connection:
+						adjaceny_matrix[mgIdx][otherIdx] = True
+	
+	# Now limit the adjacency matrix to one-way connections.
+	# We do this because the p2p model in ns3 is bidirectional, so we only need to create each connection once.
+	for rowIdx in range(ntotal-1, -1, -1):
+		for colIdx in range(ntotal):
+			if rowIdx == colIdx:
+				# don't need self connections
+				adjaceny_matrix[rowIdx][colIdx] = False
+			if adjaceny_matrix[colIdx][rowIdx]:
+				# don't need reverse connections
+				adjaceny_matrix[rowIdx][colIdx] = False
+
+	# write out the adjacency matrix file as space seperated 1's and 0's
+	# one row/column per MG
 	with open(filename, 'w') as fout:
-		for MGs_row in MGs:
-			for MG in MGs_row:
-				if not first:
-					fout.write("\n")
+		for rowIdx in range(ntotal):
+			if rowIdx > 0:
+				fout.write("\n")
 
-				for row in MG.get_adjacency_matrix(ny, nx):
-					for is_connected in row:
-						if is_connected:
-							fout.write("1 ")
-						else:
-							fout.write("0 ")
-
-				first = False
+			for colIdx in range(ntotal):
+				if adjaceny_matrix[rowIdx][colIdx]:
+					fout.write("1 ")
+				else:
+					fout.write("0 ")
 
 def draw_adjacency_matrix(MGs: list[list[MicroGrid]], filename: str):
 	ny = len(MGs)
@@ -105,7 +132,7 @@ if __name__ == "__main__":
 	MGs: list[list[MicroGrid]] = []
 
 	# how many microgrids
-	nx, ny = 10, 10
+	nx, ny = 2, 2
 
 	# how far apart to space the microgrids, in km
 	avg_dist = 10

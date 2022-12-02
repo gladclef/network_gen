@@ -98,6 +98,7 @@ class MicroGrid:
 			self.set_connected(other.connections.e(), "w")
 
 	def get_adjacency_matrix(self, nx: int, ny: int) -> list[list[bool]]:
+		""" Returns an adjacency matrix for all connections to other MGs (and itself) within the nx x ny region. """
 		ret: list[list[bool]] = []
 		for y in range(ny):
 			ret.append([])
