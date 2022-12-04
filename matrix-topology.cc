@@ -62,6 +62,7 @@ using namespace ns3;
 
 // ---------- Prototypes ------------------------------------------------------
 
+void runPythonFile(std::string filename);
 vector<vector<bool> > readNxNMatrix (std::string adj_mat_file_name);
 vector<vector<double> > readCordinatesFile (std::string node_coordinates_file_name);
 void printCoordinateArray (const char* description, vector<vector<double> > coord_array);
@@ -77,11 +78,11 @@ int main (int argc, char *argv[])
 
     // Change the variables and file names only in this block!
 
-    double SimTime        = 3.00;
+    double SimTime        = 3.00 + 8;
     double SinkStartTime  = 1.0001;
-    double SinkStopTime   = 2.90001;
+    double SinkStopTime   = 2.90001 + 8;
     double AppStartTime   = 2.0001;
-    double AppStopTime    = 2.80001;
+    double AppStopTime    = 2.80001 + 8;
 
     std::string AppPacketRate ("40Kbps");
     Config::SetDefault  ("ns3::OnOffApplication::PacketSize",StringValue ("1000"));
@@ -93,14 +94,14 @@ int main (int argc, char *argv[])
 
     srand ( (unsigned)time ( NULL ) );   // generate different seed each time
 
-    std::string tr_name ("n-node-ppp.tr");
-    std::string pcap_name ("n-node-ppp");
-    std::string flow_name ("n-node-ppp.xml");
-    std::string anim_name ("n-node-ppp.anim.xml");
+    std::string tr_name ("scratch/output/20_n-node-ppp.tr");
+    std::string pcap_name ("scratch/output/20_n-node-ppp");
+    std::string flow_name ("scratch/output/20_n-node-ppp.xml");
+    std::string anim_name ("scratch/output/20_n-node-ppp.anim.xml");
 
-    std::string adj_mat_file_name ("scratch/output/adjacency_matrix.txt");
-    std::string node_coordinates_file_name ("scratch/output/node_coordinates.txt");
-    std::string node_interfaces_name ("scratch/output/node_interfaces.txt");
+    std::string adj_mat_file_name ("scratch/output/10_adjacency_matrix.txt");
+    std::string node_coordinates_file_name ("scratch/output/10_node_coordinates.txt");
+    std::string node_interfaces_name ("scratch/output/20_node_interfaces.txt");
 
     CommandLine cmd (__FILE__);
     cmd.Parse (argc, argv);
@@ -306,7 +307,7 @@ int main (int argc, char *argv[])
 
     AsciiTraceHelper ascii;
     p2p.EnableAsciiAll (ascii.CreateFileStream (tr_name));
-    // p2p.EnablePcapAll (pcap_name);
+    p2p.EnablePcapAll (pcap_name);
 
     // Ptr<FlowMonitor> flowmon;
     // FlowMonitorHelper flowmonHelper;
@@ -324,7 +325,8 @@ int main (int argc, char *argv[])
 
     // ---------- End of Simulation Monitoring ---------------------------------
 
-    runPythonFile("scratch/replace_addresses.py");
+    runPythonFile("scratch/python/replace_addresses.py");
+    // runPythonFile("scratch/python/generate_graph.py");
 
     return 0;
 

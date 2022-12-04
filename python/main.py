@@ -128,6 +128,44 @@ def write_node_coordinates(MGs: list[list[MicroGrid]], filename: str):
 			fout.write(line[0].ljust(maxlen+2) + line[1])
 			first = False
 
+def write_encoded_mgs(MGs: list[list[MicroGrid]], filename: str):
+	version = 1
+	vals = ["MGs", version, len(MGs), len(MGs[0])]
+	strparts = [str(n) for n in vals]
+
+	with open(filename, "w") as fout:
+		fout.write(",".join(strparts) + "\n")
+		for row in MGs:
+			for mg in row:
+				fout.write(mg.encode() + "\n")
+
+def read_encoded_mgs(filename: str) -> list[list[MicroGrid]]:
+	with open(filename, "r") as fin:
+		sval = fin.readline()
+
+		# verify the string value is a list of microgrids
+		stype, sval = decode_next(sval)
+		if stype != "MGs":
+			raise RuntimeError("Unknown type \""+stype+"\"")
+		version, sval = decode_next(sval, int)
+		if version != 1:
+			raise RuntimeError("Unknown version \""+str(version)+"\"")
+		
+		# how many microgrids?
+		ny, sval = decode_next(sval, int)
+		nx, sval = decode_next(sval, int)
+
+		# decode the microgrids
+		ret: list[list[MicroGrid]] = []
+		for y in range(ny):
+			row: list[MicroGrid] = []
+			for x in range(nx):
+				mgval, sval = MicroGrid.decode(fin.readline())
+				row.append(mgval)
+			ret.append(row)
+
+		return ret
+
 if __name__ == "__main__":
 	MGs: list[list[MicroGrid]] = []
 
@@ -163,6 +201,7 @@ if __name__ == "__main__":
 				MG.use_existing_connections(MGs[y-1][x], dir="north")
 
 	# save out to files
-	draw_adjacency_matrix(MGs, os.path.join(dir(__file__), "../output", "adjacency_matrix.png"))
-	create_adjacency_matrix(MGs, os.path.join(dir(__file__), "../output", "adjacency_matrix.txt"))
-	write_node_coordinates(MGs, os.path.join(dir(__file__), "../output", "node_coordinates.txt"))
+	draw_adjacency_matrix(MGs,   os.path.join(dir(__file__), "../output", "10_adjacency_matrix.png"))
+	create_adjacency_matrix(MGs, os.path.join(dir(__file__), "../output", "10_adjacency_matrix.txt"))
+	write_node_coordinates(MGs,  os.path.join(dir(__file__), "../output", "10_node_coordinates.txt"))
+	write_encoded_mgs(MGs,       os.path.join(dir(__file__), "../output", "10_mgs_encoded.csv"))

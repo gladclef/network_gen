@@ -38,14 +38,14 @@ if __name__ == "__main__":
         print(f"Usage: {sys.argv[0]} scratch_dir")
     scratch_dir = sys.argv[1]
 
-    with open(scratch_dir+"/output/n-node-ppp.tr", "r") as fin:
+    with open(scratch_dir+"/output/20_n-node-ppp.tr", "r") as fin:
         trace_lines = fin.readlines()
-    with open(scratch_dir+"/output/node_interfaces.txt", "r") as fin:
+    with open(scratch_dir+"/output/20_node_interfaces.txt", "r") as fin:
         addr_lines = fin.readlines()
     
     # get the new addresses, and replace them in the new trace file
     addrs_matrix = get_addrs_matrix(addr_lines)
-    with open(scratch_dir+"/output/trace_custom_addrs.tr", "w") as fout:
+    with open(scratch_dir+"/output/30_n-node-ppp.tr", "w") as fout:
         fout.write(f"# This file was generated with \"python {' '.join(sys.argv)}\"\n")
         for line in trace_lines:
             oline = line

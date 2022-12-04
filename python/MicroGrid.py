@@ -61,6 +61,42 @@ class MGConnections:
 			rel_y: int = rel_y
 		self.connections[rel_y+1][rel_x+1] = is_connected
 
+	def encode(self) -> str:
+		version = 1
+		vals = ["MGConnections", version, len(self.connections), len(self.connections[0])]
+		# unwrap connections array into a single array
+		conns: list[bool] = []
+		for row in self.connections:
+			conns += row
+		vals += conns
+		strparts = [str(n) for n in vals]
+		return ",".join(strparts)
+
+	@staticmethod
+	def decode(sval: str) -> tuple['MGConnections', str]:
+		# verify the string value is a MGConnections
+		stype, sval = decode_next(sval)
+		if stype != "MGConnections":
+			raise RuntimeError("Unknown type \""+stype+"\"")
+		version, sval = decode_next(sval, int)
+		if version != 1:
+			raise RuntimeError("Unknown version \""+str(version)+"\"")
+
+		# decode the MicroGrid
+		ny, sval = decode_next(sval, int)
+		nx, sval = decode_next(sval, int)
+		connections: list[list[bool]] = []
+		for y in range(ny):
+			row: list[bool] = []
+			for x in range(nx):
+				bval, sval = decode_next(sval, lambda s: s == "True")
+				row.append(bval)
+			connections.append(row)
+
+		ret = MGConnections(0, 0)
+		ret.connections = connections
+		return ret, sval
+
 class MicroGrid:
 	def __init__(self, x: int, y: int, coord_x: float, coord_y: float, side_conn_prob: int, corner_conn_prob: int):
 		self.x = x
@@ -116,3 +152,31 @@ class MicroGrid:
 
 	def set_connected(self, is_connected: bool, rel_x_or_dir: int|str, rel_y: Optional[int] = None):
 		self.connections.set_connected(is_connected, rel_x_or_dir, rel_y)
+
+	def encode(self) -> str:
+		version = 1
+		vals = ["MicroGrid", version, self.x, self.y, self.coord_x, self.coord_y, self.connections.encode()]
+		strparts = [str(n) for n in vals]
+		return ",".join(strparts)
+
+	@staticmethod
+	def decode(sval: str) -> tuple['MicroGrid', str]:
+		# verify the string value is a MicroGrid
+		stype, sval = decode_next(sval)
+		if stype != "MicroGrid":
+			raise RuntimeError("Unknown type \""+stype+"\"")
+		version, sval = decode_next(sval, int)
+		if version != 1:
+			raise RuntimeError("Unknown version \""+str(version)+"\"")
+
+		# decode the MicroGrid
+		x, sval = decode_next(sval, int)
+		y, sval = decode_next(sval, int)
+		coord_x, sval = decode_next(sval, float)
+		coord_y, sval = decode_next(sval, float)
+		
+		# build the microgrid
+		mg = MicroGrid(x, y, coord_x, coord_y, 0, 0)
+		mg.connections, sval = MGConnections.decode(sval)
+
+		return mg, sval
