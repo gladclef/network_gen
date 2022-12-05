@@ -8,7 +8,7 @@
 #     i is the source node index
 #     j is the destination node index
 #     * are the values from the ns3 assigned addresses
-
+import os
 import sys
 
 def get_addrs_matrix(addr_lines):
@@ -38,19 +38,18 @@ if __name__ == "__main__":
         print(f"Usage: {sys.argv[0]} scratch_dir")
     scratch_dir = sys.argv[1]
 
-    with open(scratch_dir+"/output/20_n-node-ppp.tr", "r") as fin:
-        trace_lines = fin.readlines()
-    with open(scratch_dir+"/output/20_node_interfaces.txt", "r") as fin:
+    with open(os.path.join(scratch_dir, "output", "20_node_interfaces.txt"), "r") as fin:
         addr_lines = fin.readlines()
     
     # get the new addresses, and replace them in the new trace file
-    addrs_matrix = get_addrs_matrix(addr_lines)
-    with open(scratch_dir+"/output/30_n-node-ppp.tr", "w") as fout:
-        fout.write(f"# This file was generated with \"python {' '.join(sys.argv)}\"\n")
-        for line in trace_lines:
-            oline = line
-            for addrs_row in addrs_matrix:
-                for old, new in addrs_row:
-                    if old != "" and new != "":
-                        line = line.replace(old, new)
-            fout.write(line)
+    with open(os.path.join(scratch_dir, "output", "20_n-node-ppp.tr"), "r") as fin:
+        addrs_matrix = get_addrs_matrix(addr_lines)
+        with open(os.path.join(scratch_dir, "output", "30_n-node-ppp.tr"), "w") as fout:
+            fout.write(f"# This file was generated with \"python {' '.join(sys.argv)}\"\n")
+            for line in fin:
+                oline = line
+                for addrs_row in addrs_matrix:
+                    for old, new in addrs_row:
+                        if old != "" and new != "":
+                            line = line.replace(old, new)
+                fout.write(line)

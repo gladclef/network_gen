@@ -103,6 +103,13 @@ int main (int argc, char *argv[])
     std::string node_coordinates_file_name ("scratch/output/10_node_coordinates.txt");
     std::string node_interfaces_name ("scratch/output/20_node_interfaces.txt");
 
+    // remove old files
+    std::stringstream scmd;
+    char cwdbuf[2048];
+    scmd << "rm " << getcwd(cwdbuf, sizeof(cwdbuf)) << "/scratch/output/20_*";
+    FILE* in = popen(scmd.str().c_str(), "r");
+    pclose(in);
+
     CommandLine cmd (__FILE__);
     cmd.Parse (argc, argv);
     
@@ -325,8 +332,7 @@ int main (int argc, char *argv[])
 
     // ---------- End of Simulation Monitoring ---------------------------------
 
-    runPythonFile("scratch/python/replace_addresses.py");
-    // runPythonFile("scratch/python/generate_graph.py");
+    runPythonFile("scratch/python/20_parse_pcaps.py");
 
     return 0;
 
