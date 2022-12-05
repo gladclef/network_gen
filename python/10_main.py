@@ -170,7 +170,7 @@ if __name__ == "__main__":
 	MGs: list[list[MicroGrid]] = []
 
 	# how many microgrids
-	nx, ny = 3, 1
+	nx, ny = 10, 10
 
 	# how far apart to space the microgrids, in km
 	avg_dist = 10

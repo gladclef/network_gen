@@ -1,6 +1,9 @@
 output/*
 __pycache__
 
+# pycharm files
+.idea
+
 # lsp files, created with "cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=1 .."
 compile_commands.json
 
@@ -32,3 +35,6 @@ tutorial-app.h
 scratch-simulator.cc
 hello-simulator.cc
 introspected-command-line-preamble.h
+
+# sublime files
+sftp-config.json

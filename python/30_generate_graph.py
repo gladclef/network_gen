@@ -3,6 +3,8 @@ import glob
 import os
 import re
 import sys
+import matplotlib
+matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 
@@ -20,8 +22,8 @@ def parse_pcaps(files: list[str]) -> dict[int, list[list[float, int]]]:
         if match is None:
             continue
 
-        n0 = int(match.groups()[0])
-        n1 = int(match.groups()[1])
+        node = int(match.groups()[0])
+        interface = int(match.groups()[1])
 
         with open(file, "r") as fin:
             header = None
@@ -39,10 +41,9 @@ def parse_pcaps(files: list[str]) -> dict[int, list[list[float, int]]]:
                 time = float(parts[0])
                 nbytes = int(parts[3])+2 # +2 for bytes on the wire
 
-                for i in [n0, n1]:
-                    if i not in ret:
-                        ret[i] = []
-                    ret[i].append([time, nbytes])
+                if node not in ret:
+                    ret[node] = []
+                ret[node].append([time, nbytes])
 
     return ret
 
