@@ -62,13 +62,19 @@ using namespace ns3;
 
 // ---------- Prototypes ------------------------------------------------------
 
+void genOnOff(NodeContainer nodes, int from, int to, double packetRate, double startTime, double stopTime, uint16_t port, bool isExponential = false);
 void runPythonFile(std::string filename);
+void readNetSize(std::string netSizeFileName, int &ny, int &nx);
 vector<vector<bool> > readNxNMatrix (std::string adj_mat_file_name);
 vector<vector<double> > readCordinatesFile (std::string node_coordinates_file_name);
 void printCoordinateArray (const char* description, vector<vector<double> > coord_array);
 void printMatrix (const char* description, vector<vector<bool> > array);
 
 NS_LOG_COMPONENT_DEFINE ("GenericTopologyCreation");
+
+double basePacketRate = 10;
+double GlobalPacketRate = 1; // "1KBps"
+double AppPacketRate = 1; // "1KBps"
 
 int main (int argc, char *argv[])
 {
@@ -84,9 +90,11 @@ int main (int argc, char *argv[])
     double AppStartTime   = 2.0001;
     double AppStopTime    = 2.80001 + 8;
 
-    std::string AppPacketRate ("40Kbps");
-    Config::SetDefault  ("ns3::OnOffApplication::PacketSize",StringValue ("1000"));
-    Config::SetDefault ("ns3::OnOffApplication::DataRate",  StringValue (AppPacketRate));
+    std::stringstream ss;
+    ss << (int)(basePacketRate * 1000);
+    Config::SetDefault  ("ns3::OnOffApplication::PacketSize",StringValue (ss.str()));
+    ss << "Bps";
+    Config::SetDefault ("ns3::OnOffApplication::DataRate",  StringValue (ss.str()));
     std::string LinkRate ("10Mbps");
     std::string LinkDelay ("2ms");
     //  DropTailQueue::MaxPackets affects the # of dropped packets, default value:100
@@ -99,9 +107,14 @@ int main (int argc, char *argv[])
     std::string flow_name ("scratch/output/20_n-node-ppp.xml");
     std::string anim_name ("scratch/output/20_n-node-ppp.anim.xml");
 
+    std::string net_size_file_name ("scratch/output/10_network_size.txt");
     std::string adj_mat_file_name ("scratch/output/10_adjacency_matrix.txt");
     std::string node_coordinates_file_name ("scratch/output/10_node_coordinates.txt");
     std::string node_interfaces_name ("scratch/output/20_node_interfaces.txt");
+
+    uint16_t coordinationPort = 9;
+    uint16_t globalPort = 10;
+    uint16_t inetPort = 11;
 
     // remove old files
     std::stringstream scmd;
@@ -119,6 +132,8 @@ int main (int argc, char *argv[])
 
     vector<vector<bool> > Adj_Matrix;
     Adj_Matrix = readNxNMatrix (adj_mat_file_name);
+    int ny, nx;
+    readNetSize(net_size_file_name, ny, nx);
 
     // Optionally display 2-dimensional adjacency matrix (Adj_Matrix) array
     // printMatrix (adj_mat_file_name.c_str (),Adj_Matrix);
@@ -136,7 +151,7 @@ int main (int argc, char *argv[])
     int n_nodes = coord_array.size ();
     int matrixDimension = Adj_Matrix.size ();
 
-    if (matrixDimension != n_nodes)
+    if (matrixDimension != n_nodes || nx*ny != n_nodes)
     {
         NS_FATAL_ERROR ("The number of lines in coordinate file is: " << n_nodes << " not equal to the number of nodes in adjacency matrix size " << matrixDimension);
     }
@@ -265,14 +280,15 @@ int main (int argc, char *argv[])
 
     NS_LOG_INFO ("Setup Packet Sinks.");
 
-    uint16_t port = 9;
-
+    uint16_t ports[] = { coordinationPort, globalPort, inetPort };
     for (int i = 0; i < n_nodes; i++)
     {
-        PacketSinkHelper sink ("ns3::UdpSocketFactory", InetSocketAddress (Ipv4Address::GetAny (), port));
-        ApplicationContainer apps_sink = sink.Install (nodes.Get (i));   // sink is installed on all nodes
-        apps_sink.Start (Seconds (SinkStartTime));
-        apps_sink.Stop (Seconds (SinkStopTime));
+        for (size_t pidx = 0; pidx < sizeof(ports)/sizeof(uint16_t); pidx++) {
+            PacketSinkHelper sink ("ns3::UdpSocketFactory", InetSocketAddress (Ipv4Address::GetAny (), ports[pidx]));
+            ApplicationContainer apps_sink = sink.Install (nodes.Get (i));   // sink is installed on all nodes
+            apps_sink.Start (Seconds (SinkStartTime));
+            apps_sink.Stop (Seconds (SinkStopTime));
+        }
     }
 
     NS_LOG_INFO ("Setup CBR Traffic Sources.");
@@ -281,30 +297,52 @@ int main (int argc, char *argv[])
     {
         for (int j = 0; j < n_nodes; j++)
         {
+            // bursty coordination MMA traffic
             if (i != j)
             {
+                genOnOff(nodes, i, j, AppPacketRate, AppStartTime, AppStopTime, coordinationPort, true);
+            }
+        }
 
-                // We needed to generate a random number (rn) to be used to eliminate
-                // the artificial congestion caused by sending the packets at the
-                // same time. This rn is added to AppStartTime to have the sources
-                // start at different time, however they will still send at the same rate.
-
-                Ptr<UniformRandomVariable> x = CreateObject<UniformRandomVariable> ();
-                x->SetAttribute ("Min", DoubleValue (0));
-                x->SetAttribute ("Max", DoubleValue (1));
-                double rn = x->GetValue ();
-                Ptr<Node> n = nodes.Get (j);
-                Ptr<Ipv4> ipv4 = n->GetObject<Ipv4> ();
-                Ipv4InterfaceAddress ipv4_int_addr = ipv4->GetAddress (1, 0);
-                Ipv4Address ip_addr = ipv4_int_addr.GetLocal ();
-                OnOffHelper onoff ("ns3::UdpSocketFactory", InetSocketAddress (ip_addr, port)); // traffic flows from node[i] to node[j]
-                onoff.SetConstantRate (DataRate (AppPacketRate));
-                ApplicationContainer apps = onoff.Install (nodes.Get (i));  // traffic sources are installed on all nodes
-                apps.Start (Seconds (AppStartTime + rn));
-                apps.Stop (Seconds (AppStopTime));
+        // worst case scenario packets
+        int j = i + 1;
+        if (i % nx == nx-1) {
+            j = i - nx;
+            if (i < nx) {
+                j = i + nx;
+            }
+        }
+        if (j > 0 && j < n_nodes) {
+            // generate the local, regional, and global packets
+            for (int k = 0; k < 3; k++) {
+                genOnOff(nodes, i, j, GlobalPacketRate, AppStartTime, AppStopTime, globalPort);
             }
         }
     }
+
+    // generate the local, regional, and global packets from the first 3 nodes
+    // InetSocketAddress broadcastAddr = InetSocketAddress(Ipv4Address("255.255.255.255"));
+    // OnOffHelper globalGen("ns3::UdpSocketFactory", broadcastAddr);
+    // // globalGen.Install(nodes.Get(0));
+    // Ptr<Socket> broadcastSrcSock = Socket::CreateSocket(nodes.Get(0), TypeId::LookupByName ("ns3::UdpSocketFactory"));
+    // broadcastSrcSock->SetAllowBroadcast (true);
+    // broadcastSrcSock->Connect(broadcastAddr);
+    // Simulator::ScheduleWithContext(n, Seconds(1.0), &GenerateTraffic, beacon_source, packetSize, numPackets, interPacketInterval);
+    // static const ns3::InetSocketAddress kBeaconBroadcast = ns3::InetSocketAddress(ns3::Ipv4Address("255.255.255.255"), 12345);
+    // TypeId tid = TypeId::LookupByName ("ns3::UdpSocketFactory");
+    // for (int n = 0; n < n_nodes; n++) {
+    //     // beacon_sink on every node
+    //     Ptr<ns3::Socket> beacon_sink = ns3::Socket::CreateSocket(nodes.Get(n), tid);
+    //     Ipv4Address addr = nodes.Get(n)->GetObject<Ipv4>()->GetAddress(1,0).GetLocal();
+    //     InetSocketAddress beacon_local = ns3::InetSocketAddress(addr, beacon_port);
+    //     beacon_sink->Bind(beacon_local);
+    //     beacon_sink->SetRecvCallback(MakeCallback(&ReceiveBeacon));
+
+    //     // beacon source on each node
+    //     Ptr<ns3::Socket> beacon_source = Socket::CreateSocket(nodes.Get(n), tid);
+    //     beacon_source->Connect(BeaconBroadcastAddr);
+    //     Simulator::ScheduleWithContext(n, beacon_interval, &GenerateBeacon, beacon_source); 
+    // }
 
     // ---------- End of Create n*(n-1) CBR Flows ------------------------------
 
@@ -313,7 +351,7 @@ int main (int argc, char *argv[])
     NS_LOG_INFO ("Configure Tracing.");
 
     AsciiTraceHelper ascii;
-    p2p.EnableAsciiAll (ascii.CreateFileStream (tr_name));
+    // p2p.EnableAsciiAll (ascii.CreateFileStream (tr_name));
     p2p.EnablePcapAll (pcap_name);
 
     // Ptr<FlowMonitor> flowmon;
@@ -322,7 +360,7 @@ int main (int argc, char *argv[])
 
     // Configure animator with default settings
 
-    AnimationInterface anim (anim_name);
+    // AnimationInterface anim (anim_name);
     NS_LOG_INFO ("Run Simulation.");
 
     Simulator::Stop (Seconds (SimTime));
@@ -332,13 +370,55 @@ int main (int argc, char *argv[])
 
     // ---------- End of Simulation Monitoring ---------------------------------
 
-    runPythonFile("scratch/python/20_parse_pcaps.py");
+    // runPythonFile("scratch/python/20_parse_pcaps.py");
 
     return 0;
 
 }
 
 // ---------- Function Definitions -------------------------------------------
+
+void genOnOff(NodeContainer nodes, int from, int to, double packetRate, double startTime, double stopTime, uint16_t port, bool isExponential)
+{
+    // We needed to generate a random number (rn) to be used to eliminate
+    // the artificial congestion caused by sending the packets at the
+    // same time. This rn is added to AppStartTime to have the sources
+    // start at different time, however they will still send at the same rate.
+    static Ptr<UniformRandomVariable> rand = CreateObject<UniformRandomVariable> ();
+    static bool initialized = false;
+    if (!initialized) {
+        rand->SetAttribute ("Min", DoubleValue (0));
+        rand->SetAttribute ("Max", DoubleValue (1));
+        initialized = true;
+    }
+    double rn = rand->GetValue ();
+
+    // get the "to" node
+    Ptr<Node> toNode = nodes.Get (to);
+    Ptr<Ipv4> toIpv4 = toNode->GetObject<Ipv4> ();
+    Ipv4InterfaceAddress toIpv4_int_addr = toIpv4->GetAddress (1, 0);
+    Ipv4Address toIp_addr = toIpv4_int_addr.GetLocal ();
+
+    // build the onOff generator
+    OnOffHelper onoff ("ns3::UdpSocketFactory", InetSocketAddress (toIp_addr, port)); // traffic flows from node[i] to node[j]
+    if (isExponential) {
+        std::stringstream ss;
+        ss << "ns3::ExponentialRandomVariable[Mean=" << (packetRate / 2) << "]";
+        onoff.SetAttribute ("OnTime", StringValue (ss.str()));
+        ss.clear();
+        ss << "ns3::ExponentialRandomVariable[Mean=" << (1.0 - (packetRate / 2)) << "]";
+        onoff.SetAttribute ("OffTime",StringValue (ss.str()));
+    } else {
+        std::stringstream ss;
+        ss << packetRate;
+        onoff.SetConstantRate (DataRate (ss.str()));
+    }
+
+    // install on the "from" node
+    ApplicationContainer apps = onoff.Install (nodes.Get (from));  // traffic sources are installed on all nodes
+    apps.Start (Seconds (startTime + rn));
+    apps.Stop (Seconds (stopTime));
+}
 
 void runPythonFile(std::string filename)
 {
@@ -347,6 +427,24 @@ void runPythonFile(std::string filename)
     scmd << "python " << filename << " " << getcwd(cwdbuf, sizeof(cwdbuf)) << "/scratch";
     FILE* in = popen(scmd.str().c_str(), "r");
     pclose(in);
+}
+
+void readNetSize(std::string netSizeFileName, int &ny, int &nx)
+{
+    ifstream netSizeFile;
+    netSizeFile.open(netSizeFileName.c_str(), ios::in);
+    if (netSizeFile.fail ())
+    {
+        NS_FATAL_ERROR ("File " << netSizeFileName.c_str () << " not found");
+    }
+
+    std::string line;
+    getline(netSizeFile, line);
+    ny = atoi(line.c_str());
+    getline(netSizeFile, line);
+    nx = atoi(line.c_str());
+
+    netSizeFile.close();
 }
 
 vector<vector<bool> > readNxNMatrix (std::string adj_mat_file_name)

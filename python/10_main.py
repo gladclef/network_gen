@@ -128,6 +128,12 @@ def write_node_coordinates(MGs: list[list[MicroGrid]], filename: str):
 			fout.write(line[0].ljust(maxlen+2) + line[1])
 			first = False
 
+def write_network_size(MGs: list[list[MicroGrid]], filename: str):
+	ny = len(MGs)
+	nx = len(MGs[0])
+	with open(filename, "w") as fout:
+		fout.write(f"{ny}\n{nx}\n")
+
 def write_encoded_mgs(MGs: list[list[MicroGrid]], filename: str):
 	version = 1
 	vals = ["MGs", version, len(MGs), len(MGs[0])]
@@ -170,7 +176,7 @@ if __name__ == "__main__":
 	MGs: list[list[MicroGrid]] = []
 
 	# how many microgrids
-	nx, ny = 10, 10
+	nx, ny = 3, 1
 
 	# how far apart to space the microgrids, in km
 	avg_dist = 10
@@ -205,3 +211,4 @@ if __name__ == "__main__":
 	create_adjacency_matrix(MGs, os.path.join(dir(__file__), "../output", "10_adjacency_matrix.txt"))
 	write_node_coordinates(MGs,  os.path.join(dir(__file__), "../output", "10_node_coordinates.txt"))
 	write_encoded_mgs(MGs,       os.path.join(dir(__file__), "../output", "10_mgs_encoded.csv"))
+	write_network_size(MGs,      os.path.join(dir(__file__), "../output", "10_network_size.txt"))

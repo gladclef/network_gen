@@ -65,30 +65,33 @@ def main():
     for nodeIdx in node_packets:
         time_size_list = node_packets[nodeIdx]
         time_size_list.sort(key=lambda ts: ts[0])
+
+        window = []
         ts_persec = [[], []]
+        def record_window_value(t):
+            # add a sum to the dict
+            ts_persec[0].append( t )
+            ts_persec[1].append( sum([ts[1] for ts in window]) )
 
         # convert to second level granularity
-        window = []
         window_time = 0
         for ts in time_size_list:
             time = ts[0]
 
-            # add this ts to the window
-            window.append(ts)
-
             # remove values no longer within the window
             to_remove = []
-            for ts in window:
-                if ts[0] < time-1:
-                    to_remove.append(ts)
+            for old_ts in window:
+                if old_ts[0] < time-1:
+                    to_remove.append(old_ts)
                 else:
                     break
             for r in to_remove:
                 window.remove(r)
+                record_window_value(r[0]+1)
 
-            # add a sum to the dict
-            ts_persec[0].append( time )
-            ts_persec[1].append( sum([ts[1] for ts in window]) )
+            # add this ts to the window
+            window.append(ts)
+            record_window_value(time)
 
         new_node_packets[nodeIdx] = ts_persec
 
