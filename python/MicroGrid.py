@@ -1,4 +1,4 @@
-from typing import Optional
+from PIL import ImageColor, Image, ImageDraw # pip install Pillow
 
 from tools import *
 
@@ -104,6 +104,7 @@ class MicroGrid:
 		self.coord_x = coord_x
 		self.coord_y = coord_y
 		self.connections = MGConnections(side_conn_prob, corner_conn_prob)
+		self.intensity = None
 
 	def crop_connections(self, crop_north: bool, crop_east: bool, crop_south: bool, crop_west: bool):
 		if crop_north:
@@ -180,3 +181,142 @@ class MicroGrid:
 		mg.connections, sval = MGConnections.decode(sval)
 
 		return mg, sval
+
+def write_encoded_mgs(MGs: list[list[MicroGrid]], filename: str):
+	version = 1
+	vals = ["MGs", version, len(MGs), len(MGs[0])]
+	strparts = [str(n) for n in vals]
+
+	with open(filename, "w") as fout:
+		fout.write(",".join(strparts) + "\n")
+		for row in MGs:
+			for mg in row:
+				fout.write(mg.encode() + "\n")
+
+def read_encoded_mgs(filename: str) -> list[list[MicroGrid]]:
+	with open(filename, "r") as fin:
+		sval = fin.readline()
+
+		# verify the string value is a list of microgrids
+		stype, sval = decode_next(sval)
+		if stype != "MGs":
+			raise RuntimeError("Unknown type \""+stype+"\"")
+		version, sval = decode_next(sval, int)
+		if version != 1:
+			raise RuntimeError("Unknown version \""+str(version)+"\"")
+		
+		# how many microgrids?
+		ny, sval = decode_next(sval, int)
+		nx, sval = decode_next(sval, int)
+
+		# decode the microgrids
+		ret: list[list[MicroGrid]] = []
+		for y in range(ny):
+			row: list[MicroGrid] = []
+			for x in range(nx):
+				mgval, sval = MicroGrid.decode(fin.readline())
+				row.append(mgval)
+			ret.append(row)
+
+		return ret
+
+def draw_adjacency_matrix(MGs: list[list[MicroGrid]], filename: str, max_intensity: Optional[int] = None):
+	ny = len(MGs)
+	nx = len(MGs[0])
+
+	# get the connections to be drawn
+	text_lines: list[str] = []
+	for y in range(ny):
+		line = ""
+		vert = ""
+		for x in range(nx):
+			MG = MGs[y][x]
+			MG_next = None if x == nx-1 else MGs[y][x+1]
+
+			if MG.connections.is_connected("east"):
+				line += "*-"
+			else:
+				line += "* "
+
+			s = "|" if MG.connections.is_connected("south") else " "
+			if MG_next != None and MG_next.is_connected("southwest"):
+				if MG.connections.is_connected("southeast"):
+					vert += s+"X"
+				else:
+					vert += s+"/"
+			else:
+				if MG.connections.is_connected("southeast"):
+					vert += s+"\\"
+				else:
+					vert += s+" "
+
+		text_lines.append(line)
+		text_lines.append(vert)
+	# print("\n".join(text_lines))
+
+	# some basic stats
+	imgWidth = (nx * 2 - 1) * 20
+	imgHeight = (ny * 2 - 1) * 20
+	white = (255,255,255)
+	black = (0,0,0)
+	colorbar_width = 14
+	colorbar_extended = 40
+	min_intensity = max_intensity
+	if max_intensity is not None:
+		imgWidth += colorbar_extended
+
+	# draw the connections
+	img = Image.new('RGB', (imgWidth, imgHeight), color=white)
+	draw = ImageDraw.Draw(img)
+	for y in range(ny*2-1):
+		for x in range(nx*2-1):
+			char = text_lines[y][x]
+
+			if char == "*":
+				ex, ey = x*20+2, y*20+2
+				fill = None
+				MG = MGs[int(y/2)][int(x/2)]
+				if (max_intensity is not None and MG.intensity is not None):
+					min_intensity = min(min_intensity, MG.intensity)
+					r = int(255*(MG.intensity/max_intensity))
+					g = 255-r
+					fill = (r, g, 0)
+				draw.ellipse((ex, ey, ex+15, ey+15), outline=black, fill=fill)
+			if char == "-":
+				draw.line([(x*20, y*20+10), (x*20+19, y*20+10)], fill=black)
+			if char == "|":
+				draw.line([(x*20+10, y*20), (x*20+10, y*20+19)], fill=black)
+			if char == "\\" or char == "X":
+				draw.line([(x*20, y*20), (x*20+19, y*20+19)], fill=black)
+			if char == "/" or char == "X":
+				draw.line([(x*20+19, y*20), (x*20, y*20+19)], fill=black)
+
+	# draw the color bar
+	if max_intensity is not None:
+		x1 = imgWidth - colorbar_extended/2 - colorbar_width/2
+		y1 = imgHeight/10
+		x2 = imgWidth - colorbar_extended/2 + colorbar_width/2
+		y2 = imgHeight-imgHeight/10
+
+		# draw the colors
+		start = int(y1+1)
+		end = int(y2-1)
+		for y in range(start, end+1):
+			rel = (y-start) / (end-start)
+			scale = 1.0 - rel
+			r = int(255*scale)
+			g = 255-r
+			color = (r, g, 0)
+			draw.line(((x1, y), (x2, y)), fill=color)
+
+		# draw the colorbar border
+		draw.rectangle(((x1, y1), (x2, y2)), outline=black, fill=None)
+
+		# draw the min and max values
+		max_text = "%.1f" % (max_intensity/1_000_000)
+		min_text = "%.1f" % (min_intensity/1_000_000)
+		draw.text((x1, y1-24), "MB", fill=black)
+		draw.text((x1, y1-12), max_text, fill=black)
+		draw.text((x1, y2+1), min_text, fill=black)
+
+	img.save(filename)

@@ -65,6 +65,7 @@ using namespace ns3;
 void genOnOff(NodeContainer nodes, int from, int to, double packetRate, double startTime, double stopTime, uint16_t port, bool isExponential = false);
 void runPythonFile(std::string filename);
 void readNetSize(std::string netSizeFileName, int &ny, int &nx);
+void readNDegrees(std::string ndegreesFileName, int &ndegrees);
 vector<vector<bool> > readNxNMatrix (std::string adj_mat_file_name);
 vector<vector<double> > readCordinatesFile (std::string node_coordinates_file_name);
 void printCoordinateArray (const char* description, vector<vector<double> > coord_array);
@@ -74,7 +75,8 @@ NS_LOG_COMPONENT_DEFINE ("GenericTopologyCreation");
 
 double basePacketRate = 10;
 double GlobalPacketRate = 1; // "1KBps"
-double AppPacketRate = 1; // "1KBps"
+double CoordinationPacketRate = 1; // "1KBps"
+double InternetPacketRate = 10; // "1KBps"
 
 int main (int argc, char *argv[])
 {
@@ -110,6 +112,7 @@ int main (int argc, char *argv[])
     std::string net_size_file_name ("scratch/output/10_network_size.txt");
     std::string adj_mat_file_name ("scratch/output/10_adjacency_matrix.txt");
     std::string node_coordinates_file_name ("scratch/output/10_node_coordinates.txt");
+    std::string ndegreesFileName ("scratch/output/10_n_degrees.txt");
     std::string node_interfaces_name ("scratch/output/20_node_interfaces.txt");
 
     uint16_t coordinationPort = 9;
@@ -134,6 +137,8 @@ int main (int argc, char *argv[])
     Adj_Matrix = readNxNMatrix (adj_mat_file_name);
     int ny, nx;
     readNetSize(net_size_file_name, ny, nx);
+    int ndegrees;
+    readNDegrees(ndegreesFileName, ndegrees);
 
     // Optionally display 2-dimensional adjacency matrix (Adj_Matrix) array
     // printMatrix (adj_mat_file_name.c_str (),Adj_Matrix);
@@ -295,54 +300,55 @@ int main (int argc, char *argv[])
 
     for (int i = 0; i < n_nodes; i++)
     {
+        int i_x = i % nx;
+        int i_y = (i - i_x) / nx;
         for (int j = 0; j < n_nodes; j++)
         {
+            int j_x = j % nx;
+            int j_y = (j - j_x) / nx;
+
             // bursty coordination MMA traffic
-            if (i != j)
-            {
-                genOnOff(nodes, i, j, AppPacketRate, AppStartTime, AppStopTime, coordinationPort, true);
+            if (i == j) {
+                continue;
+            }
+            
+            // instead of doing a real path length check for degrees > 1, just check for the first degree
+            // for nearly all cases this should be good enough and we don't have enough time to do it right
+            if (ndegrees == 1 && !Adj_Matrix[i][j]) {
+                continue;
+            }
+
+            // if we're within ndegrees of the node i, then generate a bursty MMA traffic connection
+            if (abs(i_x - j_x) <= ndegrees && abs(i_y - j_y) <= ndegrees) {
+                genOnOff(nodes, i, j, CoordinationPacketRate, AppStartTime, AppStopTime, coordinationPort, true);
             }
         }
 
-        // worst case scenario packets
-        int j = i + 1;
-        if (i % nx == nx-1) {
-            j = i - nx;
-            if (i < nx) {
-                j = i + nx;
-            }
-        }
-        if (j > 0 && j < n_nodes) {
-            // generate the local, regional, and global packets
-            for (int k = 0; k < 3; k++) {
-                genOnOff(nodes, i, j, GlobalPacketRate, AppStartTime, AppStopTime, globalPort);
+        // constant internet traffic
+        // genOnOff(nodes, i, j, InternetPacketRate, AppStartTime, AppStopTime, coordinationPort)
+        // Don't actually simulate this, it is the same for every node.
+        // Add this value in as a constant in post-processing.
+
+        // generate the local, regional, and global broadcast packets
+        // to simulate broadcasting, pick a j that is 1 degree away from i
+        bool found = false;
+        for (int x = -1; x <= 1; x++) {
+            if (found) break;
+            for (int y = -1; y <= 1; y++) {
+                if (found) break;
+
+                int j = y * nx + x;
+                if (j < 0 || j >= n_nodes) continue;
+                if (i == j) continue;
+                if (Adj_Matrix[i][j]) {
+                    found = true;
+                    for (int k = 0; k < 3; k++) {
+                        genOnOff(nodes, i, j, GlobalPacketRate, AppStartTime, AppStopTime, globalPort);
+                    }
+                }
             }
         }
     }
-
-    // generate the local, regional, and global packets from the first 3 nodes
-    // InetSocketAddress broadcastAddr = InetSocketAddress(Ipv4Address("255.255.255.255"));
-    // OnOffHelper globalGen("ns3::UdpSocketFactory", broadcastAddr);
-    // // globalGen.Install(nodes.Get(0));
-    // Ptr<Socket> broadcastSrcSock = Socket::CreateSocket(nodes.Get(0), TypeId::LookupByName ("ns3::UdpSocketFactory"));
-    // broadcastSrcSock->SetAllowBroadcast (true);
-    // broadcastSrcSock->Connect(broadcastAddr);
-    // Simulator::ScheduleWithContext(n, Seconds(1.0), &GenerateTraffic, beacon_source, packetSize, numPackets, interPacketInterval);
-    // static const ns3::InetSocketAddress kBeaconBroadcast = ns3::InetSocketAddress(ns3::Ipv4Address("255.255.255.255"), 12345);
-    // TypeId tid = TypeId::LookupByName ("ns3::UdpSocketFactory");
-    // for (int n = 0; n < n_nodes; n++) {
-    //     // beacon_sink on every node
-    //     Ptr<ns3::Socket> beacon_sink = ns3::Socket::CreateSocket(nodes.Get(n), tid);
-    //     Ipv4Address addr = nodes.Get(n)->GetObject<Ipv4>()->GetAddress(1,0).GetLocal();
-    //     InetSocketAddress beacon_local = ns3::InetSocketAddress(addr, beacon_port);
-    //     beacon_sink->Bind(beacon_local);
-    //     beacon_sink->SetRecvCallback(MakeCallback(&ReceiveBeacon));
-
-    //     // beacon source on each node
-    //     Ptr<ns3::Socket> beacon_source = Socket::CreateSocket(nodes.Get(n), tid);
-    //     beacon_source->Connect(BeaconBroadcastAddr);
-    //     Simulator::ScheduleWithContext(n, beacon_interval, &GenerateBeacon, beacon_source); 
-    // }
 
     // ---------- End of Create n*(n-1) CBR Flows ------------------------------
 
@@ -443,6 +449,22 @@ void readNetSize(std::string netSizeFileName, int &ny, int &nx)
     ny = atoi(line.c_str());
     getline(netSizeFile, line);
     nx = atoi(line.c_str());
+
+    netSizeFile.close();
+}
+
+void readNDegrees(std::string netSizeFileName, int &ndegrees)
+{
+    ifstream netSizeFile;
+    netSizeFile.open(netSizeFileName.c_str(), ios::in);
+    if (netSizeFile.fail ())
+    {
+        NS_FATAL_ERROR ("File " << netSizeFileName.c_str () << " not found");
+    }
+
+    std::string line;
+    getline(netSizeFile, line);
+    ndegrees = atoi(line.c_str());
 
     netSizeFile.close();
 }

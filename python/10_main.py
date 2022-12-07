@@ -134,49 +134,11 @@ def write_network_size(MGs: list[list[MicroGrid]], filename: str):
 	with open(filename, "w") as fout:
 		fout.write(f"{ny}\n{nx}\n")
 
-def write_encoded_mgs(MGs: list[list[MicroGrid]], filename: str):
-	version = 1
-	vals = ["MGs", version, len(MGs), len(MGs[0])]
-	strparts = [str(n) for n in vals]
-
-	with open(filename, "w") as fout:
-		fout.write(",".join(strparts) + "\n")
-		for row in MGs:
-			for mg in row:
-				fout.write(mg.encode() + "\n")
-
-def read_encoded_mgs(filename: str) -> list[list[MicroGrid]]:
-	with open(filename, "r") as fin:
-		sval = fin.readline()
-
-		# verify the string value is a list of microgrids
-		stype, sval = decode_next(sval)
-		if stype != "MGs":
-			raise RuntimeError("Unknown type \""+stype+"\"")
-		version, sval = decode_next(sval, int)
-		if version != 1:
-			raise RuntimeError("Unknown version \""+str(version)+"\"")
-		
-		# how many microgrids?
-		ny, sval = decode_next(sval, int)
-		nx, sval = decode_next(sval, int)
-
-		# decode the microgrids
-		ret: list[list[MicroGrid]] = []
-		for y in range(ny):
-			row: list[MicroGrid] = []
-			for x in range(nx):
-				mgval, sval = MicroGrid.decode(fin.readline())
-				row.append(mgval)
-			ret.append(row)
-
-		return ret
-
 if __name__ == "__main__":
 	MGs: list[list[MicroGrid]] = []
 
 	# how many microgrids
-	nx, ny = 3, 1
+	nx, ny = 10, 10
 
 	# how far apart to space the microgrids, in km
 	avg_dist = 10
